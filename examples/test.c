@@ -36,7 +36,7 @@
 # define CHECK_REREAD
 #endif
 
-#define VIDEO_DEVICE "/dev/video0"
+#define VIDEO_DEVICE "/dev/video10"
 #if 1
 # define FRAME_WIDTH  640
 # define FRAME_HEIGHT 480

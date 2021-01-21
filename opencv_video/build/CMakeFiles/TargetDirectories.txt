@@ -1,0 +1,3 @@
+/home/rkk/v4l2loopback/opencv_video/build/CMakeFiles/rebuild_cache.dir
+/home/rkk/v4l2loopback/opencv_video/build/CMakeFiles/demo.dir
+/home/rkk/v4l2loopback/opencv_video/build/CMakeFiles/edit_cache.dir

@@ -20,14 +20,6 @@ using namespace cv::cuda;
 #include <opencv2/videoio.hpp>
 #include <opencv2/highgui.hpp>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
-#include <linux/videodev2.h>
-
 #define VIDEO_DEVICE "/dev/video10"
 #define FRAME_FORMAT V4L2_PIX_FMT_YUV420
 #define FRAME_WIDTH 1280
@@ -35,14 +27,14 @@ using namespace cv::cuda;
 #define CHANNELS 3
 #define SIZE_IMGE (FRAME_WIDTH * 2 * FRAME_HEIGHT) * CHANNELS
 
-std::string gstreamer_pipeline (int sensor_id=0,
-                                int sensor_mode=3,
-                                int capture_width=1280,
-                                int capture_height=720,
-                                int display_width=1280,
-                                int display_height=720,
-                                int framerate=30,
-                                int flip_method=0) {
+std::string gstreamer_pipelineIn (int sensor_id=0,
+                                  int sensor_mode=3,
+                                  int capture_width=1280,
+                                  int capture_height=720,
+                                  int display_width=1280,
+                                  int display_height=720,
+                                  int framerate=30,
+                                  int flip_method=0) {
     return "nvarguscamerasrc sensor-id=" + std::to_string(sensor_id) + " sensor-mode=" + std::to_string(sensor_mode) + " ! " \
            "video/x-raw(memory:NVMM), " \
            "width=(int)" + std::to_string(capture_width) + ", " \
@@ -50,8 +42,40 @@ std::string gstreamer_pipeline (int sensor_id=0,
            "format=(string)NV12, framerate=(fraction)" + std::to_string(framerate) +"/1 ! " \
            "nvvidconv flip-method=" + std::to_string(flip_method) + " ! " \
            "video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" + std::to_string(display_height) + ", format=(string)BGRx ! " \
-           "videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+           "videoconvert ! video/x-raw, format=(string)BGR ! " \
+           "appsink";
 }
+
+
+
+std::string gstreamer_pipelineOut(int capture_width=1280*2,
+                                  int capture_height=720,
+                                  int display_width=1280*2,
+                                  int display_height=720,
+                                  int framerate=30,
+                                  const char *device_name=VIDEO_DEVICE) {
+    return "appsrc ! " \
+           "video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", " \
+           "height=(int)" + std::to_string(capture_height) + ", " \
+           "format=(string)BGR, framerate=(fraction)" + std::to_string(framerate) +"/1 ! " \
+           "videoconvert ! video/x-raw, " \
+           "width=(int)" + std::to_string(display_width) + ", " \
+           "height=(int)" + std::to_string(display_height) + ", " \
+           "format=(string)BGRx ! " \
+           "videoconvert ! video/x-raw, format=(string)NV12 ! " \
+           "v4l2sink device=\"/dev/video10\"";
+}
+
+/*
+           "video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", " \
+           "height=(int)" + std::to_string(capture_height) + ", " \
+           "format=(string)BGR, framerate=(fraction)" + std::to_string(framerate) +"/1 ! " \
+           "videoconvert ! video/x-raw, " \
+           "width=(int)" + std::to_string(display_width) + ", " \
+           "height=(int)" + std::to_string(display_height) + ", " \
+           "format=(string)BGRx ! " \
+           "videoconvert ! video/x-raw, format=(string)NV12 ! " \
+*/
 
 int camera(std::string pipeline, cv::cuda::GpuMat *cuda_img, cv::cuda::Stream *cuda_stream, bool *stop_thread) {
   std::cout << "Using pipeline: \n\t" << pipeline << "\n";
@@ -81,31 +105,6 @@ int camera(std::string pipeline, cv::cuda::GpuMat *cuda_img, cv::cuda::Stream *c
   return 0;
 }
 
-int open_video() {
-	struct v4l2_format v;
-
-  const char*video_device=VIDEO_DEVICE;
-	int dev_fd = open(video_device, O_RDWR);
-	if (dev_fd == -1) {
-		std::cout << "cannot open video device\n";
-	}
-	v.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-	if (ioctl(dev_fd, VIDIOC_G_FMT, &v) == -1){
-		std::cout << "cannot setup video device\n";
-	}
-	v.fmt.pix.width = FRAME_WIDTH * 2;
-	v.fmt.pix.height = FRAME_HEIGHT;
-	v.fmt.pix.pixelformat = FRAME_FORMAT;
-	v.fmt.pix.sizeimage = SIZE_IMGE;
-	v.fmt.pix.field = V4L2_FIELD_NONE;
-  v.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
-	if (ioctl(dev_fd, VIDIOC_S_FMT, &v) == -1){
-		std::cout << "cannot setup video device\n";
-	}
-
-	return dev_fd;
-}
-
 int csi() {
   int sensor_mode = 4 ;
   int capture_width = FRAME_WIDTH ;
@@ -115,26 +114,36 @@ int csi() {
   int framerate = 60 ;
   int flip_method = 0 ;
 
-  std::string pipeline0 = gstreamer_pipeline(0, 
-                                            sensor_mode,
-                                            capture_width,
-	                                          capture_height,
-                                            display_width,
-                                            display_height,
-                                            framerate,
-                                            flip_method);
+  std::string pipeline0 = gstreamer_pipelineIn(0, 
+                                              sensor_mode,
+                                              capture_width,
+                                              capture_height,
+                                              display_width,
+                                              display_height,
+                                              framerate,
+                                              flip_method);
 
-  std::string pipeline1 = gstreamer_pipeline(1,
-                                            sensor_mode,
-                                            capture_width,
-	                                          capture_height,
-                                            display_width,
-                                            display_height,
-                                            framerate,
-                                            flip_method);
+  std::string pipeline1 = gstreamer_pipelineIn(1,
+                                              sensor_mode,
+                                              capture_width,
+                                              capture_height,
+                                              display_width,
+                                              display_height,
+                                              framerate,
+                                              flip_method);
+
+  std::string pipelineOut = gstreamer_pipelineOut(capture_width * 2,
+                                                  capture_height,
+                                                  display_width * 2,
+                                                  display_height,
+                                                  framerate,
+                                                  VIDEO_DEVICE);
+
+  cv::VideoWriter video;
+  std::cout << "Using pipeline: \n\t" << pipelineOut << "\n";
+  video.open(pipelineOut, 0, framerate, cv::Size(FRAME_WIDTH * 2, FRAME_HEIGHT), true);
 
   cv::cuda::GpuMat cuda_rear_img, cuda_front_img, dst_rear_img, dst_front_img;
-
   cv::cuda::Stream cuda_rear_stream, cuda_front_stream, cuda_merged_stream;
   
   bool stop_threads = false;
@@ -164,10 +173,6 @@ int csi() {
   }
   cv::Mat M_front = cv::getPerspectiveTransform(pts3, pts2);
 
-/* START PREPARE VIDEO STREAM */
-  int loc_dev = open_video();
-/* END PREPARE VIDEO STREAM */
-
   while (true) {
     if (!cuda_rear_img.empty() && !cuda_front_img.empty()) {
       cv::cuda::warpPerspective(cuda_rear_img, dst_rear_img, M_rear, cuda_rear_img.size(), INTER_LINEAR , BORDER_CONSTANT, 0, cuda_rear_stream );
@@ -186,12 +191,13 @@ int csi() {
 //      cuda_merged_stream.waitForCompletion();
       NewImg.download(result_img);
 
-    	write(loc_dev, result_img.data, SIZE_IMGE);
-
-/*      cv::imshow("Merged", result_img);
+      video.write(result_img);
+/*
+      cv::imshow("Merged", result_img);
       if (cv::waitKey(30) == (char)27) {
         break;
-      };*/
+      };
+*/
     }
   }
 

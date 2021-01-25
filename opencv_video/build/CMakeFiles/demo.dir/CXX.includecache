@@ -33,6 +33,20 @@ opencv2/videoio.hpp
 -
 opencv2/highgui.hpp
 -
+stdio.h
+-
+stdlib.h
+-
+string.h
+-
+fcntl.h
+-
+unistd.h
+-
+sys/ioctl.h
+-
+linux/videodev2.h
+-
 
 /usr/local/include/opencv4/opencv2/calib3d.hpp
 opencv2/core.hpp
